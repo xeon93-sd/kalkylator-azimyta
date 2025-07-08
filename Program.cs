@@ -91,7 +91,7 @@ public class CommentedPointsForm : Form
             }
         }
     }
-    public CommentedPointsForm()
+    public CommentedPointsForm(bool darkTheme = false)
     {
         Text = "Точки";
         Size = new Size(550, 500);
@@ -139,15 +139,57 @@ public class CommentedPointsForm : Form
         addPointButton.Click += (s, e) => AddPointRow();
         Controls.Add(addPointButton);
         AddPointRow();
+        ApplyTheme(darkTheme);
+    }
+    private void ApplyTheme(bool dark)
+    {
+        Color bg = dark ? Color.FromArgb(32, 32, 32) : Color.White;
+        Color fg = dark ? Color.White : Color.Black;
 
+        BackColor = bg;
+        ForeColor = fg;
+
+        foreach (Control ctrl in Controls)
+        {
+            ApplyToControl(ctrl, dark, fg, bg);
+        }
+        foreach (var row in pointRows)
+        {
+            ApplyToControl(row.GetPanel(), dark, fg, bg);
+        }
+    }
+    private void ApplyToControl(Control ctrl, bool dark, Color fg, Color bg)
+    {
+        if (ctrl is Label || ctrl is CheckBox)
+        {
+            ctrl.ForeColor = fg;
+            ctrl.BackColor = bg;
+        }
+        else if (ctrl is TextBox tb)
+        {
+            tb.BackColor = dark ? Color.FromArgb(48, 48, 48) : Color.White;
+            tb.ForeColor = fg;
+        }
+        else if (ctrl is Button btn)
+        {
+            btn.BackColor = dark ? Color.FromArgb(64, 64, 64) : SystemColors.Control;
+            btn.ForeColor = fg;
+        }
+        else if (ctrl.HasChildren)
+        {
+            foreach (Control child in ctrl.Controls)
+            {
+                ApplyToControl(child, dark, fg, bg);
+            } 
+        }
     }
     private void RemoveLastPoint()
     {
         if (pointRows.Count > 0)
         {
-        var last = pointRows[pointRows.Count - 1];
-        pointsPanel.Controls.Remove(last.GetPanel());
-        pointRows.RemoveAt(pointRows.Count - 1);
+            var last = pointRows[pointRows.Count - 1];
+            pointsPanel.Controls.Remove(last.GetPanel());
+            pointRows.RemoveAt(pointRows.Count - 1);
         }
     }
     private class PointRow
@@ -232,7 +274,7 @@ public class MainForm : Form
         };
         editorButton.Click += (s, e) =>
         {
-            var editor = new CommentedPointsForm();
+            var editor = new CommentedPointsForm(themeToggle.Checked);
             editor.PointSelectedInEditor += (point, isStart) =>
             {
                 if (point != null)
@@ -313,12 +355,7 @@ public class MainForm : Form
             ApplyTheme(themeToggle.Checked);
             SaveTheme(themeToggle.Checked);
         };
-        editorButton.Click += (s, e) =>
-        {
-            var editor = new CommentedPointsForm();
-            editor.ShowDialog();
-        };
-        Controls.Add(editorButton);
+         Controls.Add(editorButton);
         Controls.Add(themeToggle);
         Controls.Add(distanceLabel);
         //Загрузка темы
