@@ -21,6 +21,7 @@ public class PointData
 
 public class CommentedPointsForm : Form
 {
+    private bool isDarkTheme;
     public event Action<PointData, bool> PointSelectedInEditor;
     private Button saveButton;
     private FlowLayoutPanel pointsPanel;
@@ -65,8 +66,10 @@ public class CommentedPointsForm : Form
     }
     private void AddPointRow()
     {
+
         var row = new PointRow();
         row.PointSelected += OnPointSelected;
+        row.ApplyTheme(isDarkTheme);
         pointRows.Add(row);
         pointsPanel.Controls.Add(row.GetPanel());
     }
@@ -93,6 +96,7 @@ public class CommentedPointsForm : Form
     }
     public CommentedPointsForm(bool darkTheme = false)
     {
+        isDarkTheme = darkTheme;
         Text = "Точки";
         Size = new Size(550, 500);
         StartPosition = FormStartPosition.CenterScreen;
@@ -139,7 +143,7 @@ public class CommentedPointsForm : Form
         addPointButton.Click += (s, e) => AddPointRow();
         Controls.Add(addPointButton);
         AddPointRow();
-        ApplyTheme(darkTheme);
+        ApplyTheme(isDarkTheme);
     }
     private void ApplyTheme(bool dark)
     {
@@ -200,8 +204,25 @@ public class CommentedPointsForm : Form
         private TextBox commentBox = new TextBox { PlaceholderText = "Комментарий", Width = 220 };
         private TextBox xBox = new TextBox { PlaceholderText = "X", Width = 80 };
         private TextBox yBox = new TextBox { PlaceholderText = "Y", Width = 80 };
-        
-
+        public void ApplyTheme(bool dark)
+        {
+            Color bg = dark ? Color.FromArgb(32, 32, 32) : Color.White;
+            Color fg = dark ? Color.White : Color.Black;
+            foreach (Control ctrl in panel.Controls)
+            {
+                if (ctrl is TextBox tb)
+                {
+                    tb.BackColor = dark ? Color.FromArgb(48, 48, 48) : Color.White;
+                    tb.ForeColor = fg;
+                }
+                else if (ctrl is Button btn)
+                {
+                    btn.BackColor = dark ? Color.FromArgb(64, 64, 64) : SystemColors.Control;
+                    btn.ForeColor = fg;
+                }
+            }
+            panel.BackColor = bg;
+        }
         private Panel panel = new Panel { Width = 500, Height = 60 };
         public void SetData(PointData data)
         {
