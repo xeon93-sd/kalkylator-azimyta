@@ -278,6 +278,7 @@ public class CommentedPointsForm : Form
 }
 public class MainForm : Form
 {
+    private CommentedPointsForm editorForm;
     TextBox inputX1, inputX2, inputY1, inputY2;
     Label resultLabel;
     Label distanceLabel;
@@ -295,25 +296,36 @@ public class MainForm : Form
         };
         editorButton.Click += (s, e) =>
         {
-            var editor = new CommentedPointsForm(themeToggle.Checked);
-            editor.PointSelectedInEditor += (point, isStart) =>
+            if (editorForm == null || editorForm.IsDisposed)
             {
-                if (point != null)
+                editorForm = new CommentedPointsForm(themeToggle.Checked);
+                editorForm.PointSelectedInEditor += (point, isStart) =>
                 {
-                    if (isStart)
+                    if (point != null)
                     {
-                        inputX1.Text = point.X?.ToString() ?? "";
-                        inputY1.Text = point.Y?.ToString() ?? "";
+                        if (isStart)
+                        {
+                            inputX1.Text = point.X?.ToString() ?? "";
+                            inputY1.Text = point.Y?.ToString() ?? "";
+                        }
+                        else
+                        {
+                            inputX2.Text = point.X?.ToString() ?? "";
+                            inputY2.Text = point.Y?.ToString() ?? "";
+                        }
                     }
-                    else
-                    {
-                       inputX2.Text = point.X?.ToString() ?? "";
-                        inputY2.Text = point.Y?.ToString() ?? ""; 
-                    }
-                }
 
-            };
-            editor.ShowDialog();
+                };
+                editorForm.FormClosed += (sender2, args2) =>
+                {
+                    editorForm = null;
+                };
+                editorForm.Show();
+            }
+            else
+            {
+                editorForm.BringToFront();
+            }
         };
         Text = "Калькулятор азимута by xeon93.";
         Width = 400;
