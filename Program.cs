@@ -21,6 +21,17 @@ public class PointData
 
 public class CommentedPointsForm : Form
 {
+    public List<PointData> GetAllPoints()
+    {
+        var list = new List<PointData>();
+        foreach (var row in pointRows)
+        {
+            var point = row.ToPointData();
+            if (point.X.HasValue && point.Y.HasValue)
+                list.Add(point);
+        }
+        return list;
+    }
     private bool isDarkTheme;
     public event Action<PointData, bool> PointSelectedInEditor;
     private Button saveButton;
@@ -278,6 +289,73 @@ public class CommentedPointsForm : Form
 }
 public class MainForm : Form
 {
+    private void ShowOptimalRoute()
+    {
+        if (editorForm == null || editorForm.IsDisposed)
+        {
+            MessageBox.Show("Сначала открой и настрой точки в редакторе!", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        List<PointData> allPoints = editorForm.GetAllPoints();
+        if (allPoints.Count < 3)
+        {
+            MessageBox.Show("Нужно минимум 3 точки для маршрута!", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        //АЛГОРИТИМ ПУТИ
+        List<PointData> route = BuildGreedyRoute(allPoints);
+        List<string> resultLines = new List<string>();
+
+        for (int i = 0; i < route.Count; i++)
+        {
+            var current = route[i];
+            var next = route[(i + 1) % route.Count]; // замыкаение в цикл
+            double dx = (next.X ?? 0) - (current.X ?? 0);
+            double dy = (next.Y ?? 0) - (current.Y ?? 0);
+            double angle = Math.Atan2(dx, dy) * 180.0 / Math.PI;
+
+            if (angle > 180) angle -= 360;
+            if (angle < -180) angle += 360;
+
+            double dist = Math.Sqrt(dx * dx + dy * dy);
+            resultLines.Add($"{current.Comment} → {next.Comment}: Азимут = {angle:F2}°, Расстояние = {dist:F2}");
+        }
+        MessageBox.Show(string.Join("\n", resultLines), "Оптимальный маршрут");
+    }
+    private List<PointData> BuildGreedyRoute(List<PointData> points)
+    {
+        List<PointData> route = new List<PointData>();
+        HashSet<int> visited = new HashSet<int>();
+        int current = 0;
+        route.Add(points[current]);
+        visited.Add(current);
+
+        while (visited.Count < points.Count)
+        {
+            int nearest = -1;
+            double minDist = double.MaxValue;
+            for (int i = 0; i < points.Count; i++)
+            {
+                if (visited.Contains(i)) continue;
+                double dx = (points[i].X ?? 0) - (points[current].X ?? 0);
+                double dy = (points[i].Y ?? 0) - (points[current].Y ?? 0);
+                double dist = dx * dx + dy * dy;
+                if (dist < minDist)
+                {
+                    minDist = dist;
+                    nearest = i;
+                }
+            }
+            if (nearest != -1)
+            {
+                visited.Add(nearest);
+                current = nearest;
+                route.Add(points[nearest]);
+            }
+            else break;
+        }
+        return route;
+    }
     private CommentedPointsForm editorForm;
     TextBox inputX1, inputX2, inputY1, inputY2;
     Label resultLabel;
@@ -287,6 +365,16 @@ public class MainForm : Form
 
     public MainForm()
     {
+        var routeButton = new Button
+        {
+            Text = "Оптимальный маршрут",
+            Location = new Point(140, 260),
+            Height = 40,
+            Width = 120
+        };
+        routeButton.Click += (s, e) => ShowOptimalRoute();
+        Controls.Add(routeButton);
+
         var editorButton = new Button
         {
             Text = "Редактор точек",
@@ -329,7 +417,7 @@ public class MainForm : Form
         };
         Text = "Калькулятор азимута by xeon93.";
         Width = 400;
-        Height = 300;
+        Height = 350;
 
         // Лейблы полей
         Controls.Add(new Label { Text = "Координата по X1", Location = new Point(20, 3), AutoSize = true });
