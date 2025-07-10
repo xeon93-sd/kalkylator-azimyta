@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 class Program
 {
     [STAThread]
@@ -289,7 +290,80 @@ public class CommentedPointsForm : Form
 }
 public class MainForm : Form
 {
-    private void ShowOptimalRoute()
+    private async Task<List<PointData>> BuildBruteForceRouteAsync(List<PointData> points, IProgress<int> progress)
+    {   
+        List<PointData> bestRoute = null;
+        double bestDistance = double.MaxValue;
+
+        int n = points.Count;
+        var indices = new int[n];
+        for (int i = 0; i < n; i++) indices[i] = i;
+
+        long totalPermutations = Factorial(n);
+        long checkedPermutations = 0;
+
+        // Рекурсивный генератор перестановок с обработкой прогресса
+        async Task Permute(int start)
+        {
+            if (start == n)
+            {
+                // Рассчёт расстояния маршрута
+                double dist = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    var current = points[indices[i]];
+                    var next = points[indices[(i + 1) % n]];
+                    double dx = (next.X ?? 0) - (current.X ?? 0);
+                    double dy = (next.Y ?? 0) - (current.Y ?? 0);
+                    dist += Math.Sqrt(dx * dx + dy * dy);
+                }
+                if (dist < bestDistance)
+                {
+                    bestDistance = dist;
+                    bestRoute = new List<PointData>();
+                    for (int i = 0; i < n; i++)
+                        bestRoute.Add(points[indices[i]]);
+                }
+
+                checkedPermutations++;
+                if (checkedPermutations % 100 == 0)
+                {
+                    int percent = (int)(checkedPermutations * 100 / totalPermutations);
+                    progress.Report(percent);
+                    await Task.Yield(); // чтобы UI успевал обновляться
+                }
+                return;
+            }
+            for (int i = start; i < n; i++)
+            {
+                Swap(indices, start, i);
+                await Permute(start + 1);
+                Swap(indices, start, i);
+            }
+        }
+
+        await Permute(0);
+        return bestRoute;
+    }
+
+    private static void Swap(int[] array, int i, int j)
+    {
+        int temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
+    }
+
+    private static long Factorial(int n)
+    {
+        long res = 1;
+        for (int i = 2; i <= n; i++) res *= i;
+        return res;
+    }
+    private TextBox bruteForceLimitBox;
+    private Label bruteForceLimitLabel;
+    private ProgressBar progressBar;
+    private Label progressLabel;
+    private async void ShowOptimalRoute()
     {
         if (editorForm == null || editorForm.IsDisposed)
         {
@@ -302,14 +376,48 @@ public class MainForm : Form
             MessageBox.Show("Нужно минимум 3 точки для маршрута!", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        //АЛГОРИТИМ ПУТИ
-        List<PointData> route = BuildGreedyRoute(allPoints);
+
+        int maxBruteForce = 8; // По умолчанию
+        if (!int.TryParse(bruteForceLimitBox.Text, out maxBruteForce))
+            maxBruteForce = 8;
+
+        List<PointData> route = null;
+
+        progressBar.Value = 0;
+        progressBar.Visible = true;
+        progressLabel.Visible = true;
+
+        if (allPoints.Count <= maxBruteForce)
+        {
+            var progress = new Progress<int>(percent =>
+            {
+                progressBar.Value = percent;
+                progressLabel.Text = $"{percent}%";
+            });
+            route = await BuildBruteForceRouteAsync(allPoints, progress);
+        }
+        else
+        {
+            route = BuildGreedyRoute(allPoints);
+            progressBar.Value = 100;
+            progressLabel.Text = "100%";
+        }
+
+        progressBar.Visible = false;
+        progressLabel.Visible = false;
+
+        if (route == null)
+        {
+            MessageBox.Show("Не удалось построить маршрут.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
         List<string> resultLines = new List<string>();
 
         for (int i = 0; i < route.Count; i++)
         {
             var current = route[i];
-            var next = route[(i + 1) % route.Count]; // замыкаение в цикл
+            var next = route[(i + 1) % route.Count]; // замыкаем цикл
             double dx = (next.X ?? 0) - (current.X ?? 0);
             double dy = (next.Y ?? 0) - (current.Y ?? 0);
             double angle = Math.Atan2(dx, dy) * 180.0 / Math.PI;
@@ -417,7 +525,7 @@ public class MainForm : Form
         };
         Text = "Калькулятор азимута by xeon93.";
         Width = 400;
-        Height = 350;
+        Height = 400;
 
         // Лейблы полей
         Controls.Add(new Label { Text = "Координата по X1", Location = new Point(20, 3), AutoSize = true });
@@ -476,13 +584,47 @@ public class MainForm : Form
             ApplyTheme(themeToggle.Checked);
             SaveTheme(themeToggle.Checked);
         };
-         Controls.Add(editorButton);
+        Controls.Add(editorButton);
         Controls.Add(themeToggle);
         Controls.Add(distanceLabel);
         //Загрузка темы
         bool dark = LoadSavedTheme();
         themeToggle.Checked = dark;
         ApplyTheme(dark);
+        bruteForceLimitLabel = new Label
+        {
+            Text = "Порог для\nточного перебора:",
+            Location = new Point(20, 200),
+            AutoSize = false,
+            Width = 80,
+            Height = 60
+        };
+        Controls.Add(bruteForceLimitLabel);
+        bruteForceLimitBox = new TextBox
+        {
+            Location = new Point(20, 260),
+            Width = 25,
+            Text = "8" // значение по умолчанию
+        };
+        Controls.Add(bruteForceLimitBox);
+        progressBar = new ProgressBar
+        {
+            Location = new Point(20, 310),
+            Width = 340,
+            Height = 20,
+            Minimum = 0,
+            Maximum = 100,
+            Value = 0,
+        };
+        Controls.Add(progressBar);
+        progressLabel = new Label
+        {
+            Location = new Point(370, 310),
+            Width = 50,
+            Text = "0%",
+            Visible = false
+        };
+        Controls.Add(progressLabel);
     }
 
     private void ApplyTheme(bool dark)
